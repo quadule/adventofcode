@@ -1,68 +1,48 @@
 class PriorityQueue
-  def initialize
-    @queue = []
-  end
+  def initialize; @queue = []; end
+  def empty?; @queue.empty?; end
+  def shift; @queue.shift; end
   def add(priority, item)
-    @queue << [priority, @queue.length, item]
-  end
-  def next
-    @queue.shift[2]
-  end
-  def empty?
-    @queue.empty?
-  end
-  def sort!
-    @queue.sort!
+    position = @queue.bsearch_index { (_1[0] <=> priority) > 0 } || @queue.length
+    @queue.insert(position, [priority, item])
   end
 end
 
-class RepeatedMap
+class CavernMap
   def initialize(map)
-    @map = map
+    @map, @map_rows, @map_cols = map, map.size, map.first.size
+    @rows, @cols = @map_rows * 5, @map_cols * 5
+    @start, @goal = [0, 0], [@rows - 1, @cols - 1]
+    @moves = [[1, 0], [0, 1], [-1, 0], [0, -1]]
   end
+
   def get(x, y)
-    risk = @map[y % @map.size][x % @map.first.size] + y / @map.size + x / @map.first.size
-    risk > 9 ? risk % 10 + 1 : risk
+    risk = @map[y % @map_rows][x % @map_cols] + y / @map_rows + x / @map_cols
+    risk -= 9 while risk > 9
+    risk
   end
-  def columns
-    @map.first.size * 5
-  end
-  def rows
-    @map.size * 5
-  end
-end
 
-def risk_score(path, map)
-  path[1..].map { |(x, y)| map.get(x, y) }.sum
-end
-
-def find_path(map, start, goal)
-  visited = {}
-  queue = PriorityQueue.new
-  queue.add(1, [start, [], 0])
-  while !queue.empty?
-    position, path, cost = queue.next
-    next if visited[position]
-    new_path = path + [position]
-    return new_path if position == goal
-    visited[position] = true
-    average_cost = risk_score(new_path, map).to_f / new_path.size
-    [[1, 0], [0, 1], [-1, 0], [0, -1]].each do |dx, dy|
-      x, y = position[0] + dx, position[1] + dy
-      next unless y >= 0 && y < map.rows && x >= 0 && x < map.columns
-      next if visited[[x, y]]
-      new_cost = cost + map.get(x, y)
-      priority = new_cost + average_cost
-      queue.add(priority, [[x, y], new_path, new_cost])
+  def safest_path
+    queue, visited = PriorityQueue.new, {}
+    queue.add(0, [@start, []])
+    while !queue.empty?
+      risk, (position, path) = *queue.shift
+      next if visited.include?(position)
+      new_path = path + [position]
+      return [risk, new_path] if position == @goal
+      visited[position] = true
+      @moves.each do |dx, dy|
+        x, y = position[0] + dx, position[1] + dy
+        next unless y >= 0 && y < @rows && x >= 0 && x < @cols
+        new_position = [x, y]
+        next if visited.include?(new_position)
+        queue.add(risk + get(x, y), [new_position, new_path])
+      end
     end
-    queue.sort!
+    nil
   end
-  nil
 end
 
-numbers = File.readlines("input.txt", chomp: true).map(&:chars).map { _1.map(&:to_i) }
-map = RepeatedMap.new(numbers)
-start = [0, 0]
-goal = [map.rows - 1, map.columns - 1]
-path = find_path(map, start, goal)
-puts risk_score(path, map)
+map = CavernMap.new(File.readlines("input.txt", chomp: true).map { _1.chars.map(&:to_i) })
+risk, path = map.safest_path
+puts risk
